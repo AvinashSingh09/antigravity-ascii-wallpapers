@@ -68,4 +68,4 @@ App updates replace the archive, which removes the mod. A new app build needs it
 
 ## License
 
-MIT. See [LICENSE](LICENSE). Music in the demo video: "Uplifting Bass" by Lily J and sound effects from [Mixkit](https://mixkit.co), used under the Mixkit free licenses.
+MIT. See [LICENSE](LICENSE).
