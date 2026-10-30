@@ -1,6 +1,6 @@
 # ASCII Wallpapers for Antigravity
 
-Live, animated backgrounds for the [Antigravity](https://antigravity.google) desktop app, drawn entirely in text characters. 22 themes, a one-click picker, and nothing leaves your machine.
+Live, animated backgrounds for the [Antigravity](https://antigravity.google) desktop app, drawn entirely in text characters. 23 themes, a one-click picker, and nothing leaves your machine.
 
 **[Watch the demo and see the themes →](https://mix4o445.github.io/antigravity-ascii-wallpapers/)**
 
@@ -10,7 +10,7 @@ Live, animated backgrounds for the [Antigravity](https://antigravity.google) des
 
 ## Features
 
-- **22 live themes**: 9 light and 13 dark. Cloud Drift, Aurora, Honu Lagoon, Koi Pond, Jellyfish, Paper Boats, Sakura, Fireflies, Moonlit, Ember Dunes, Night Rain, Snowfall, Sky Lanterns, Windy Meadow, Spiral Galaxy, Bamboo Grove, Digital Rain, Morning Tide, Autumn Leaves, Alpine Dawn, Retro Sunset and Lava Lamp.
+- **23 live themes**: 9 light and 14 dark. Cloud Drift, Aurora, Honu Lagoon, Koi Pond, Jellyfish, Paper Boats, Sakura, Fireflies, Moonlit, Ember Dunes, Night Rain, Snowfall, Sky Lanterns, Windy Meadow, Spiral Galaxy, Bamboo Grove, Digital Rain, Morning Tide, Autumn Leaves, Alpine Dawn, Retro Sunset, Lava Lamp and Starry Catnap.
 - **Whole-app theming**: the sidebar, menus, composer, title bar and window controls are recolored to match each scene.
 - **Three ways to open the picker**: click **Themes** in the top right, press **Ctrl+Alt+W**, or type `/theme` in the composer.
 - **Controls**: Pause freezes the animation, Adjust sets intensity, and Off restores the stock look instantly.
@@ -61,7 +61,7 @@ App updates replace the archive, which removes the mod. A new app build needs it
 
 | File | Purpose |
 |---|---|
-| `wallpaper-scenes.js` | The 22 scene renderers |
+| `wallpaper-scenes.js` | The 23 scene renderers |
 | `ascii-wallpapers.js` | Theme definitions, picker UI and app recoloring |
 | `wallpapers-main.js` | Saves your preferences in the main process |
 | `manage-wallpapers.cjs` | Install, verify and restore |

@@ -3,7 +3,7 @@
 const drawAsciiScene = (() => {
   'use strict';
   // 0..11 is a density ramp; 12+ are special glyphs scenes pick directly.
-  const CH = ' .:-=+*tx%S#v^~o|/\\@\',';
+  const CH = ' .:-=+*tx%S#v^~o|/\\@\',zZ';
   const hash = (x, y) => { let h = Math.imul(x | 0, 374761393) ^ Math.imul(y | 0, 668265263); h = Math.imul(h ^ (h >>> 13), 1274126177); return ((h ^ (h >>> 16)) >>> 0) / 4294967296; };
   const noise = (x, y) => {
     const xi = Math.floor(x), yi = Math.floor(y), xf = x - xi, yf = y - yi, u = xf * xf * (3 - 2 * xf), v = yf * yf * (3 - 2 * yf);
@@ -85,6 +85,35 @@ const drawAsciiScene = (() => {
     if (s >= 0 && s <= span && Math.abs(y - by(s) - sway) < .02 * (1 - s / span) + .005) { o.t = 1; o.c = 3; return true; }
     // A twig off the main branch
     if (s > span * .3 && s < span * .62) { const q = (s - span * .3) / (span * .32); if (Math.abs(y - by(span * .3) - q * .12 - sway) < .008 + .006 * (1 - q)) { o.t = 1; o.c = 3; return true; } }
+    return false;
+  }
+
+  // Starry Catnap: the near hill the cat sleeps on, and the curled cat in units of its own size (v grows downward).
+  let NAPN = 0; const NAPF = new Float64Array(64), NAPC = new Float64Array(64);
+  const napF = (x, A) => .8 + .03 * Math.sin(x * 3.1 + 2) + .018 * noise(x * 6, 3);
+  const napY = (x, A) => .845 + .018 * Math.sin(x * 2.6 + 1) + .05 * ((x - A + .36) / .8) ** 2;
+  function napCat(u, v, t, o, i, j) {
+    if (u < -1.35 || u > 1.3 || v < -.75 || v > .8) return false;
+    const yb = (v - .58) / (1 + .04 * Math.sin(t * 1.15)) + .58; // the back rises and falls from the ground up
+    const hx = u + .78, hy = v - .22 - .012 * Math.sin(t * 1.15), hd = Math.hypot(hx, hy * 1.08);
+    if (hy < -.14) for (const e of [-.26, .2]) {
+      const w = .19 * (hy + .63) / .49, dx = Math.abs(hx - e);
+      if (hy > -.63 && dx < w) { o.t = 1; o.c = dx < w * .42 && hy > -.5 ? 7 : 4; return true; }
+    }
+    if (hd < .4) {
+      o.t = 1; o.c = 4;
+      if (Math.abs(hy + .03) < .055 && (Math.abs(hx + .2) < .075 || Math.abs(hx - .2) < .075)) { o.c = 8; o.g = 3; }
+      else if (Math.abs(hx) < .07 && Math.abs(hy - .11) < .05) o.c = 7;
+      else if (hy > .08) o.c = 6;
+      else if (hy < -.2 && Math.abs(Math.sin(hx * 14)) > .75) o.c = 5;
+      return true;
+    }
+    if (hd < .47) { o.t = 1; o.c = 8; return true; }
+    const tv = .47 + .09 * Math.sin(u * 1.5 + .4), td = Math.abs(v - tv);
+    if (u > -.42 && u < 1.08 && td < .13) { o.t = 1; o.c = u < -.2 ? 6 : Math.sin(u * 9) > .35 ? 5 : 4; return true; }
+    if (u > -.42 && u < 1.08 && td < .2 && v < tv) { o.t = 1; o.c = 8; return true; }
+    const q = (u - .1) ** 2 + (yb / .6) ** 2;
+    if (q < 1) { o.t = 1; o.c = Math.sin(u * 7 + yb * 2.4) > .42 ? 5 : q > .78 && yb > .2 ? 5 : 4; return true; }
     return false;
   }
 
@@ -517,6 +546,42 @@ const drawAsciiScene = (() => {
         if (F > 1) { o.t = 1; o.c = F > 2.6 ? 0 : F > 1.5 ? 1 : 2; return; }
         if (F > .7) { o.v = (F - .7) * 1.4; o.c = 3; o.g = hash(i, j) > .5 ? 1 : 2; return; }
         if (hash(i, 5) > .93 && Math.abs(y - 1 + wrap(t * .05 * (1 + hash(i, 2)) + hash(i, 3), 1.1)) < o.ch * .5) { o.g = 15; o.c = 4; o.v = .6; }
+      } },
+    catnap: { pal: ['#ffffff', '#9fe8ff', '#b79cff', '#ff9fd6', '#f0a95e', '#c8743a', '#fff0dc', '#ffa9a0', '#2a1c2e', '#141d3c', '#22325a', '#e9efff', '#fff0b8'], ink: '#5a3218', inkA: .34,
+      bg(g, w, h) { grad(g, w, h, [[0, '#04061a'], [.5, '#0d1140'], [.8, '#211c5e'], [1, '#0b0f2a']]); glow(g, w * .55, h * .28, h * .9, '#5b4bd034');
+        const A = w / h;
+        for (const [fn, c] of [[napF, '#141d3c'], [napY, '#22325a']]) { g.fillStyle = c; g.beginPath(); g.moveTo(0, h); for (let px = 0; px <= w + 4; px += 4) g.lineTo(px, fn(px / h, A) * h); g.lineTo(w, h); g.fill(); } },
+      pre(t, A) {
+        // A meteor spends a third of its cycle crossing the sky; only live ones go on the list f walks.
+        NAPN = 0;
+        for (let k = 0; k < 120 && NAPN < 64; k++) {
+          const q = wrap(t / (5 + 9 * hash(k, 7)) + hash(k, 8), 1) / .34; if (q >= 1) continue;
+          const d = q * (.9 + .5 * hash(k, 4));
+          PX[NAPN] = hash(k, 1) * (A + .75) - d * .6; PY[NAPN] = hash(k, 2) * .6 - .3 + d * .8; PZ[NAPN] = .14 + .3 * hash(k, 3); NAPF[NAPN] = Math.sin(q * Math.PI); NAPC[NAPN++] = hash(k, 5) * 3;
+        }
+      },
+      f(x, y, t, A, o, i, j) {
+        const cx = A - .36, s = .15, cy = napY(cx, A) - s * .56;
+        if (napCat((x - cx) / s, (y - cy) / s, t, o, i, j)) return;
+        for (let k = 0; k < 3; k++) {
+          const q = wrap(t * .11 + k / 3, 1), zx = cx - s * 1.05 + .07 * q + .012 * Math.sin(t + k * 2), zy = cy - s * .55 - q * .24;
+          if (Math.abs(x - zx) < o.cw * .5 && Math.abs(y - zy) < o.ch * .5) { o.g = q < .45 ? 22 : 23; o.c = 12; o.v = 1 - q * .62; return; }
+        }
+        const near = napY(x, A), far = napF(x, A);
+        if (y > near) {
+          if (y - near < o.ch && hash(i, 9) > .35) { o.g = hash(i, 4) > .5 ? 17 : 18; o.c = 10; o.v = .8; return; }
+          if (noise(x * 22, y * 44) > .62) { o.v = .34; o.c = 11; o.g = hash(i, j) > .5 ? 1 : 2; } return;
+        }
+        if (y > far) { if (noise(x * 18 + 5, y * 36) > .7) { o.v = .28; o.c = 2; o.g = 1; } return; }
+        for (let k = 0; k < NAPN; k++) {
+          if (y > PY[k] + o.ch || y < PY[k] - PZ[k]) continue;
+          const rx = x - PX[k], ry = y - PY[k], back = rx * .6 - ry * .8, side = Math.abs(rx * .8 + ry * .6);
+          if (back < -o.ch * .5 || back > PZ[k] || side > o.cw * .95) continue;
+          if (back < o.ch * .8 && side < o.cw * .55) { o.t = 1; o.g = 6; o.c = 0; return; }
+          const f = 1 - back / PZ[k]; o.g = side < o.cw * .5 ? 17 : 1; o.v = NAPF[k] * (f * .85 + .25); o.c = f > .68 ? 1 + (NAPC[k] | 0) : f > .3 ? 1 : 2; return;
+        }
+        const h = hash(i, j), band = noise(x * 1.5 + 4, y * 2.4 - x * .9);
+        if (h > .985 - band * .05) { o.v = (h > .996 ? .9 : .32) * (.62 + .38 * Math.sin(t * 1.6 + h * 70)); o.c = 11; o.g = h > .996 ? 5 : 1; }
       } }
   };
 

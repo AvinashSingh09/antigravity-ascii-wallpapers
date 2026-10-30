@@ -12,7 +12,7 @@
     const key='asciiWallpaperPreferences.v1',raw=changes?.[key];
     if(typeof raw!=='string'||raw.length>1024)throw Error('Invalid wallpaper preferences');
     const p=JSON.parse(raw);
-    if(!['off','clouds','aurora','lagoon','koi','jelly','boats','sakura','fireflies','moon','dunes','rain','snow','lanterns','meadow','galaxy','bamboo','code','tide','autumn','alpine','retro','lava'].includes(p.theme)||!Number.isFinite(p.intensity)||p.intensity<15||p.intensity>100||typeof p.paused!=='boolean')throw Error('Invalid wallpaper preferences');
+    if(!['off','clouds','aurora','lagoon','koi','jelly','boats','sakura','fireflies','moon','dunes','rain','snow','lanterns','meadow','galaxy','bamboo','code','tide','autumn','alpine','retro','lava','catnap'].includes(p.theme)||!Number.isFinite(p.intensity)||p.intensity<15||p.intensity>100||typeof p.paused!=='boolean')throw Error('Invalid wallpaper preferences');
     const data=JSON.stringify({[key]:JSON.stringify({theme:p.theme,intensity:p.intensity,paused:p.paused})});
     fs.writeFileSync(file()+'.tmp',data,'utf8');fs.renameSync(file()+'.tmp',file());
   });
