@@ -35,14 +35,37 @@
   }:null;
   const windowAPI=typeof electronNativeAPI!=='undefined'?electronNativeAPI:window.electronNative;
   const reduced=matchMedia('(prefers-reduced-motion: reduce)');
-  let prefs={theme:'clouds',intensity:100,paused:reduced.matches};
+  let prefs={theme:'clouds',intensity:100,paused:reduced.matches,reactive:true};
   let alive=true,open=false,sheet,canvas,ctx,host,shadow,style,observer,resizeObserver;
   let sceneWidth=0,sceneHeight=0,calmBox=null;
   let raf=0,last=0,time=0,layoutTimer=0,saveQueue=Promise.resolve(),lastPreview=-1;
   const cleanups=[],modeNodes=new Map();
   let originalChrome;
+  // Agent activity: energy eases toward 1 while agents run; pulse is a one-shot ripple when one finishes.
+  let agents=0,energy=0,pulse=0,unhookAgents=null;
   const current=()=>themes.find(t=>t.id===prefs.theme)||themes[0];
-  function validate(p){return {theme:p?.theme==='off'||themes.some(t=>t.id===p?.theme)?p.theme:'clouds',intensity:Number.isFinite(p?.intensity)?Math.min(100,Math.max(15,p.intensity)):100,paused:typeof p?.paused==='boolean'?p.paused:reduced.matches};}
+  function validate(p){return {theme:p?.theme==='off'||themes.some(t=>t.id===p?.theme)?p.theme:'clouds',intensity:Number.isFinite(p?.intensity)?Math.min(100,Math.max(15,p.intensity)):100,paused:typeof p?.paused==='boolean'?p.paused:reduced.matches,reactive:p?.reactive!==false};}
+  // Antigravity already reports its running-agent count to the main process for the tray menu
+  // (agent:update-active-count). Observe that call in this isolated preload instead of scraping the DOM.
+  function hookAgents(){
+    const ipc=typeof electron_1!=='undefined'?electron_1.ipcRenderer:null;
+    if(!ipc||typeof ipc.invoke!=='function')return;
+    const original=ipc.invoke;
+    const wrapped=function(channel,...args){
+      if(channel==='agent:update-active-count'){try{onAgents(Number(args[0]));}catch{}}
+      return original.call(this,channel,...args);
+    };
+    try{ipc.invoke=wrapped;}catch{return;}
+    if(ipc.invoke===wrapped)unhookAgents=()=>{if(ipc.invoke===wrapped)ipc.invoke=original;};
+  }
+  function onAgents(n){
+    if(!Number.isFinite(n)||n<0)return;
+    const previous=agents;agents=n;
+    // While the window is hidden the ripple waits, so it plays when you come back to a finished agent.
+    if(n<previous&&prefs.reactive&&!prefs.paused&&prefs.theme!=='off')pulse=1;
+    schedule();
+  }
+  hookAgents();
   const make=(tag,attrs={},text='')=>{const e=document.createElement(tag);for(const [k,v] of Object.entries(attrs))e.setAttribute(k,v);if(text)e.textContent=text;return e;};
   function listen(e,name,fn,options){e.addEventListener(name,fn,options);cleanups.push(()=>e.removeEventListener(name,fn,options));}
   function save(){const value=JSON.stringify(prefs);saveQueue=saveQueue.catch(()=>{}).then(()=>native?native.save(value):localStorage.setItem(KEY,value)).catch(()=>{shadow.querySelector('.status').textContent='Could not save this theme. Please try again.';});}
@@ -62,9 +85,9 @@
       .choice{padding:0;border:0;border-radius:4px;background:none;aspect-ratio:8/5;min-width:0}.choice:focus-visible{outline-offset:2px}
       .preview{display:block;width:100%;height:100%;border-radius:4px;opacity:.8;transition:opacity .12s}.choice:hover .preview,.choice:focus-visible .preview,.choice[aria-pressed=true] .preview{opacity:1}
       .choice[aria-pressed=true]{box-shadow:0 0 0 2px var(--aw-panel),0 0 0 3px var(--aw-fg)}
-      .settings{display:flex;align-items:center;gap:10px;margin:10px 2px 0;font-size:11px;color:var(--aw-muted)}.settings label{display:flex;align-items:center;gap:8px}.settings input{width:160px;accent-color:var(--aw-fg)}.value{font-variant-numeric:tabular-nums}.status{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%)}
+      .settings{display:flex;align-items:center;gap:10px;margin:10px 2px 0;font-size:11px;color:var(--aw-muted)}.settings label{display:flex;align-items:center;gap:8px}.settings input[type=range]{width:160px;accent-color:var(--aw-fg)}.settings input[type=checkbox]{margin:0;accent-color:var(--aw-fg)}.value{font-variant-numeric:tabular-nums}.status{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%)}
       @media(max-width:900px){.choices{grid-template-columns:repeat(auto-fill,minmax(54px,1fr))}}
-      @media(max-width:650px){.kind{display:none}.trigger span{display:none}.trigger{right:145px}.settings input{width:100px}}
+      @media(max-width:650px){.kind{display:none}.trigger span{display:none}.trigger{right:145px}.settings input[type=range]{width:100px}}
       @media(prefers-reduced-motion:reduce){.preview{transition:none}}
     `;shadow.append(css);
     const trigger=make('button',{class:'trigger',type:'button','aria-label':'Choose theme','aria-expanded':'false','aria-controls':'theme-picker',title:'Themes · Ctrl+Alt+W'});trigger.innerHTML=paletteIcon+'<span>Themes</span>';
@@ -81,12 +104,13 @@
     for(const t of themes){const b=make('button',{class:'choice',type:'button','data-theme':t.id,'aria-pressed':'false','aria-label':`${t.name}, ${t.light?'light':'dark'}`});const preview=make('canvas',{class:'preview',width:'160',height:'100','aria-hidden':'true'});b.append(preview);listen(b,'click',()=>select(t.id));listen(b,'pointerenter',()=>label(t));listen(b,'focus',()=>label(t));choices.append(b);drawAsciiScene(preview.getContext('2d'),160,100,t,10,1);}
     listen(choices,'pointerleave',()=>label());listen(choices,'focusout',e=>{if(!choices.contains(e.relatedTarget))label();});
     panel.append(choices);
-    const adjust=make('div',{class:'settings',id:'theme-settings',hidden:''});const intensity=make('label',{},'Intensity');const range=make('input',{type:'range',min:'15',max:'100',step:'1','aria-label':'Wallpaper intensity'});intensity.append(range);adjust.append(intensity,make('span',{class:'value'}));panel.append(adjust,make('div',{class:'status','aria-live':'polite'}));
+    const adjust=make('div',{class:'settings',id:'theme-settings',hidden:''});const intensity=make('label',{},'Intensity');const range=make('input',{type:'range',min:'15',max:'100',step:'1','aria-label':'Wallpaper intensity'});intensity.append(range);const reactive=make('label',{title:'Speed up while agents run and ripple when one finishes'},'React to agents');const reactiveBox=make('input',{type:'checkbox',class:'reactive'});reactive.prepend(reactiveBox);adjust.append(intensity,make('span',{class:'value'}),make('span',{class:'spacer'}),reactive);panel.append(adjust,make('div',{class:'status','aria-live':'polite'}));
     shadow.append(trigger,panel);
     listen(trigger,'click',()=>toggle(!open));listen(close,'click',()=>toggle(false));listen(off,'click',()=>select('off'));
     listen(pause,'click',()=>{prefs.paused=!prefs.paused;apply();save();});
     listen(settings,'click',()=>{adjust.hidden=!adjust.hidden;settings.setAttribute('aria-expanded',String(!adjust.hidden));syncLayout();});
     listen(range,'input',()=>{prefs.intensity=Number(range.value);shadow.querySelector('.value').textContent=prefs.intensity+'%';render();});listen(range,'change',save);
+    listen(reactiveBox,'change',()=>{prefs.reactive=reactiveBox.checked;if(!prefs.reactive){pulse=0;}save();});
     listen(choices,'keydown',e=>{const all=[...choices.children],i=all.indexOf(e.target.closest('.choice'));if(i<0)return;let next=i;if(e.key==='ArrowRight')next=(i+1)%all.length;else if(e.key==='ArrowLeft')next=(i-1+all.length)%all.length;else if(e.key==='Home')next=0;else if(e.key==='End')next=all.length-1;else return;e.preventDefault();all[next].focus();select(all[next].dataset.theme);});
     listen(document,'pointerdown',e=>{if(open&&!e.composedPath().includes(host))toggle(false,false);});
     listen(document,'keydown',e=>{
@@ -159,7 +183,8 @@
     if(canvas)canvas.hidden=off;
     shadow.querySelectorAll('[data-theme]').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.theme===prefs.theme)));
     const pause=shadow.querySelector('.pause');pause.textContent=prefs.paused?'Play':'Pause';pause.setAttribute('aria-pressed',String(prefs.paused));pause.disabled=off;
-    shadow.querySelector('input').value=String(prefs.intensity);shadow.querySelector('input').disabled=off;
+    const range=shadow.querySelector('input[type=range]'),reactive=shadow.querySelector('.reactive');
+    range.value=String(prefs.intensity);range.disabled=off;reactive.checked=prefs.reactive;reactive.disabled=off;
     shadow.querySelector('.value').textContent=prefs.intensity+'%';label();
     shadow.querySelector('.status').textContent=off?'Original appearance restored':`${t.name}, ${t.light?'light':'dark'} appearance`;
     render();syncLayout();schedule();
@@ -170,11 +195,21 @@
     else{syncLayout();}
   }
   function resize(){const r=sheet.getBoundingClientRect(),d=Math.min(devicePixelRatio||1,1.5);sceneWidth=r.width;sceneHeight=r.height;canvas.width=Math.round(r.width*d);canvas.height=Math.round(r.height*d);ctx.setTransform(d,0,0,d,0,0);}
-  function render(){if(ctx&&canvas&&!canvas.hidden){drawAsciiScene(ctx,sceneWidth,sceneHeight,current(),time,.35+.65*prefs.intensity/100,calmBox);}}
+  function render(){if(ctx&&canvas&&!canvas.hidden){drawAsciiScene(ctx,sceneWidth,sceneHeight,current(),time,.35+.65*prefs.intensity/100,calmBox,{energy,pulse});}}
   function previews(all=false){if(!shadow||!open)return;for(const t of themes){if(!all&&t.id!==prefs.theme)continue;const c=shadow.querySelector(`[data-theme="${t.id}"] canvas`);drawAsciiScene(c.getContext('2d'),c.width,c.height,t,time,1);}}
   function schedule(){cancelAnimationFrame(raf);raf=0;last=performance.now();if(alive&&!document.hidden&&!prefs.paused&&prefs.theme!=='off')raf=requestAnimationFrame(tick);}
-  function tick(now){if(now-last>=33){time+=Math.min((now-last)/1000,.1);last=now;render();if(open&&Math.floor(time*5)!==lastPreview){lastPreview=Math.floor(time*5);previews();}}raf=requestAnimationFrame(tick);}
-  function dispose(){alive=false;cancelAnimationFrame(raf);clearTimeout(layoutTimer);observer?.disconnect();resizeObserver?.disconnect();cleanups.forEach(f=>f());setMode(current(),true);delete document.body.dataset.awTheme;delete document.body.dataset.awMode;canvas?.remove();host?.remove();style?.remove();if(originalChrome)windowAPI?.setTitleBarOverlay(originalChrome)?.catch?.(()=>{});window.__agyAsciiInstalled=false;}
+  function tick(now){
+    if(now-last>=33){
+      const dt=Math.min((now-last)/1000,.1);last=now;
+      // Ease into and out of the working state so a quick tool call never makes the scene lurch.
+      const target=prefs.reactive&&agents>0?1:0;energy+=(target-energy)*Math.min(1,dt*(target?1.2:.6));if(energy<.002)energy=0;
+      pulse=Math.max(0,pulse-dt/1.8);
+      time+=dt*(1+.8*energy);render();
+      if(open&&Math.floor(time*5)!==lastPreview){lastPreview=Math.floor(time*5);previews();}
+    }
+    raf=requestAnimationFrame(tick);
+  }
+  function dispose(){alive=false;cancelAnimationFrame(raf);clearTimeout(layoutTimer);unhookAgents?.();observer?.disconnect();resizeObserver?.disconnect();cleanups.forEach(f=>f());setMode(current(),true);delete document.body.dataset.awTheme;delete document.body.dataset.awMode;canvas?.remove();host?.remove();style?.remove();if(originalChrome)windowAPI?.setTitleBarOverlay(originalChrome)?.catch?.(()=>{});window.__agyAsciiInstalled=false;}
   async function start(){
     try{const data=native?await native.get():{[KEY]:localStorage.getItem(KEY)};if(data?.[KEY])prefs=validate(JSON.parse(data[KEY]));}catch{}
     const shell=document.querySelector('.agy-shell');const computed=getComputedStyle(shell||document.body);originalChrome={color:computed.getPropertyValue('--background').trim()||'#101010',symbolColor:computed.getPropertyValue('--foreground').trim()||'#cccccc'};
