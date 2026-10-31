@@ -81,6 +81,7 @@ footer{padding:88px 0 56px;text-align:center;color:var(--muted);font-size:14px}
     <div class="feat"><h3>Whole-app theming</h3><p>The sidebar, menus, composer and title bar are recolored to match each scene.</p></div>
     <div class="feat"><h3>9 light, 14 dark</h3><p>From Cloud Drift and Sakura to Night Rain and Spiral Galaxy.</p></div>
     <div class="feat"><h3>Pause, Adjust, Off</h3><p>Freeze the motion, dial the intensity, or return to stock instantly.</p></div>
+    <div class="feat"><h3>Reacts to your agents</h3><p>The scene picks up while agents run and ripples outward when one finishes.</p></div>
     <div class="feat"><h3>Never covers your text</h3><p>The background sits behind your work, and the composer stays fully interactive.</p></div>
     <div class="feat"><h3>100% local</h3><p>No network requests. Your pick is remembered on your machine.</p></div>
   </div>
@@ -88,14 +89,14 @@ footer{padding:88px 0 56px;text-align:center;color:var(--muted);font-size:14px}
 
 <section>
   <h2>Install</h2>
-  <p class="center">Windows, Antigravity <b>2.28.2</b>, and <a href="https://nodejs.org">Node.js</a> 18+.</p>
+  <p class="center">Windows, Antigravity (<b>2.28.2</b> hand-verified, newer builds checked automatically), and <a href="https://nodejs.org">Node.js</a> 18+.</p>
   <div class="steps">
     <div class="step"><div class="num">1</div><div><p><a href="https://github.com/Mix4o445/antigravity-ascii-wallpapers/archive/refs/heads/main.zip">Download the ZIP</a> and extract it.</p></div></div>
     <div class="step"><div class="num">2</div><div><p>Close Antigravity completely.</p></div></div>
     <div class="step"><div class="num">3</div><div><p>Open PowerShell in the extracted folder and run:</p><pre>node .\manage-wallpapers.cjs install</pre></div></div>
     <div class="step"><div class="num">4</div><div><p>Reopen Antigravity and click <b>Themes</b>. To uninstall later, close the app and run:</p><pre>node .\manage-wallpapers.cjs restore</pre></div></div>
   </div>
-  <p class="note">Unofficial community mod, not affiliated with or endorsed by Google. The installer patches your local app archive only after verifying its exact SHA-256, keeps a backup, and refuses to touch any other build. App updates remove the mod.</p>
+  <p class="note">Unofficial community mod, not affiliated with or endorsed by Google. The installer runs safety checks on your app build before patching, keeps a backup, and refuses any build that fails them. App updates remove the mod; run the install command again afterwards.</p>
 </section>
 
 <footer>MIT licensed · Demo music: "Uplifting Bass" by Lily J and sound effects from <a href="https://mixkit.co">Mixkit</a></footer>

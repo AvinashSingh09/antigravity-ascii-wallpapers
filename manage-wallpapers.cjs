@@ -1,16 +1,65 @@
-/* Usage: node manage-wallpapers.cjs install|restore */
+/* Usage: node manage-wallpapers.cjs install|verify|status|restore */
 'use strict';
-const fs=require('fs'), path=require('path'), crypto=require('crypto');
-const archive=path.join(process.env.LOCALAPPDATA,'Programs','antigravity','resources','app.asar');
+const fs=require('fs'), path=require('path'), crypto=require('crypto'), vm=require('vm');
+const appDir=path.join(process.env.LOCALAPPDATA,'Programs','antigravity');
+const archive=path.join(appDir,'resources','app.asar');
 const backup=archive+'.ascii-wallpapers.backup';
 const receipt=archive+'.ascii-wallpapers.json';
+const MARKER='// BEGIN LOCAL ASCII WALLPAPERS';
 const sha=b=>crypto.createHash('sha256').update(b).digest('hex');
-const SUPPORTED='046fa2ba9abe96bc915eb7ed12887c067396a8a12148842ab4f4e2cd05a68feb';
+// Builds that were inspected by hand. Any other build must pass inspect() before it is patched.
+const VERIFIED={'046fa2ba9abe96bc915eb7ed12887c067396a8a12148842ab4f4e2cd05a68feb':'2.28.2'};
 function parse(bytes){
  if(bytes.readUInt32LE(0)!==4)throw Error('Unexpected ASAR format');
  const dataStart=8+bytes.readUInt32LE(4);
  const header=JSON.parse(bytes.subarray(16,16+bytes.readUInt32LE(12)).toString('utf8'));
  return {header,dataStart};
+}
+function entries(header){
+ const map=new Map();
+ (function walk(tree,prefix){for(const [name,item] of Object.entries(tree.files||{})){const p=prefix?prefix+'/'+name:name;if(item.files)walk(item,p);else map.set(p,item);}})(header,'');
+ return map;
+}
+function packedText(bytes,p){
+ const {header,dataStart}=parse(bytes),item=entries(header).get(p);
+ if(!item||item.unpacked||item.link)return null;
+ return bytes.subarray(dataStart+Number(item.offset),dataStart+Number(item.offset)+item.size).toString('utf8');
+}
+// Electron fuses live after a fixed sentinel in the executable. Fuse 4 is EnableEmbeddedAsarIntegrityValidation:
+// if a build turns it on, any edited archive would stop the app from launching, so refuse instead.
+function asarIntegrityFuse(){
+ const exe=path.join(appDir,'Antigravity.exe');
+ if(!fs.existsSync(exe))return 'unknown';
+ const bytes=fs.readFileSync(exe),sentinel=Buffer.from('dL7pKGdnNz796PbbjQWNKmHXBZaB9tsX'),i=bytes.indexOf(sentinel);
+ if(i<0)return 'unknown';
+ const length=bytes[i+sentinel.length+1],wire=bytes.subarray(i+sentinel.length+2,i+sentinel.length+2+length).toString('latin1');
+ return wire.length>4?(wire[4]==='1'?'on':'off'):'unknown';
+}
+// Compile the patched file the way Electron loads CommonJS, without running it.
+function compiles(source,name){
+ try{new vm.Script('(function (exports, require, module, __filename, __dirname) {'+source+'\n})',{filename:name});return true;}catch{return false;}
+}
+function inspect(original,script,mainScript){
+ const errors=[],warnings=[];
+ let pkg={};try{pkg=JSON.parse(packedText(original,'package.json')||'{}');}catch{}
+ const preload=packedText(original,'dist/preload.js'),main=packedText(original,'dist/main.js');
+ if(pkg.productName!=='Antigravity')errors.push('package.json does not describe Antigravity');
+ if(pkg.main!=='dist/main.js')errors.push('the app entry point is no longer dist/main.js');
+ if(preload===null)errors.push('dist/preload.js is missing or not packed in the archive');
+ if(main===null)errors.push('dist/main.js is missing or not packed in the archive');
+ if(preload?.includes(MARKER)||main?.includes(MARKER))errors.push('this archive already contains wallpapers but has no matching backup; reinstall Antigravity to get a clean copy');
+ if(preload!==null&&/\bdrawAsciiScene\b/.test(preload))errors.push('dist/preload.js already declares drawAsciiScene');
+ if(preload!==null&&!compiles(preload+'\n\n'+MARKER+'\n'+script,'dist/preload.js'))errors.push('the patched dist/preload.js would not compile');
+ if(main!==null&&!compiles(main+'\n\n'+MARKER+'\n'+mainScript,'dist/main.js'))errors.push('the patched dist/main.js would not compile');
+ const fuse=asarIntegrityFuse();
+ if(fuse==='on')errors.push('Electron ASAR integrity validation is enabled for this build');
+ if(fuse==='unknown')warnings.push('could not read Electron fuses from Antigravity.exe');
+ if(preload!==null){
+  if(!preload.includes('const electron_1 = require("electron")'))warnings.push('preload has no electron_1; preferences fall back to page storage');
+  if(!preload.includes('electronNativeAPI'))warnings.push('preload has no electronNativeAPI; the title bar will not be recolored');
+  if(!preload.includes("'agent:update-active-count'"))warnings.push('preload no longer reports running agents; "React to agents" will have no effect');
+ }
+ return {version:pkg.version||'unknown',verified:VERIFIED[sha(original)]===pkg.version,errors,warnings};
 }
 function repack(original,script,mainScript){
  const {header,dataStart}=parse(original);
@@ -22,7 +71,7 @@ function repack(original,script,mainScript){
    if(item.unpacked||item.link)continue;
    let content=original.subarray(dataStart+Number(item.offset),dataStart+Number(item.offset)+item.size);
    if(p==='dist/preload.js'||p==='dist/main.js'){
-    content=Buffer.concat([content,Buffer.from('\n\n// BEGIN LOCAL ASCII WALLPAPERS\n'),Buffer.from(p==='dist/preload.js'?script:mainScript)]);
+    content=Buffer.concat([content,Buffer.from('\n\n'+MARKER+'\n'),Buffer.from(p==='dist/preload.js'?script:mainScript)]);
     const blockSize=item.integrity?.blockSize||4194304,blocks=[];
     for(let i=0;i<content.length;i+=blockSize)blocks.push(sha(content.subarray(i,i+blockSize)));
     item.integrity={algorithm:'SHA256',hash:sha(content),blockSize,blocks};
@@ -46,36 +95,56 @@ function repack(original,script,mainScript){
  }}verify(decoded.header);
  return output;
 }
-function replace(bytes){const temp=archive+'.ascii-wallpapers.tmp';fs.writeFileSync(temp,bytes);fs.renameSync(temp,archive);}
+function replace(bytes){
+ const temp=archive+'.ascii-wallpapers.tmp';
+ try{fs.writeFileSync(temp,bytes);fs.renameSync(temp,archive);}
+ catch(e){try{fs.unlinkSync(temp);}catch{}if(['EBUSY','EPERM','EACCES'].includes(e.code))throw Error('The app archive is in use. Close Antigravity completely (including the tray icon) and try again.');throw e;}
+}
 function main(){
  const action=process.argv[2];
- if(!['install','restore','verify'].includes(action))throw Error('Use install, restore, or verify');
- let original=fs.readFileSync(archive);const digest=sha(original);
+ if(!['install','restore','verify','status'].includes(action))throw Error('Use install, verify, status, or restore');
+ if(!fs.existsSync(archive))throw Error('Antigravity was not found at '+archive);
+ const current=fs.readFileSync(archive),digest=sha(current);
+ const r=fs.existsSync(receipt)?JSON.parse(fs.readFileSync(receipt,'utf8')):null;
  if(action==='restore'){
-  if(!fs.existsSync(receipt)||!fs.existsSync(backup))throw Error('No wallpaper backup found');
-  const r=JSON.parse(fs.readFileSync(receipt,'utf8'));
+  if(!r||!fs.existsSync(backup))throw Error('No wallpaper backup found');
   if(digest===r.original){console.log('Original app is already restored.');return;}
-  if(digest!==r.patched)throw Error('The app has changed since installation. Refusing to overwrite a newer app.');
+  if(digest!==r.patched)throw Error('The app has changed since installation (probably an update, which already removed the wallpapers). Nothing to restore.');
   const b=fs.readFileSync(backup);if(sha(b)!==r.original)throw Error('Backup checksum does not match');
-  replace(b);console.log('Original Antigravity restored. Reload its window to remove wallpapers.');return;
+  replace(b);console.log('Original Antigravity '+(r.version||'')+' restored. Reload its window to remove wallpapers.');return;
  }
- if(fs.existsSync(receipt)){
-  const r=JSON.parse(fs.readFileSync(receipt,'utf8'));
-  if(digest===r.patched){
-   original=fs.readFileSync(backup);
-   if(sha(original)!==SUPPORTED)throw Error('Original backup checksum does not match');
-  }
- }
- if(sha(original)!==SUPPORTED)throw Error('This installer supports the inspected Antigravity 2.28.2 build only. App files have changed; inspect the new build before installing.');
+ // Find the clean archive: the backup when our patch is installed, otherwise the archive itself.
+ let original=current,state='not installed';
+ if(r&&digest===r.patched){
+  if(!fs.existsSync(backup))throw Error('Wallpapers are installed but the backup is missing');
+  original=fs.readFileSync(backup);
+  if(sha(original)!==r.original)throw Error('Original backup checksum does not match');
+  state='installed';
+ }else if(r&&digest!==r.original)state='removed by an app update';
  const script=fs.readFileSync(path.join(__dirname,'wallpaper-scenes.js'),'utf8')+'\n'+fs.readFileSync(path.join(__dirname,'ascii-wallpapers.js'),'utf8');
- const patched=repack(original,script,fs.readFileSync(path.join(__dirname,'wallpapers-main.js'),'utf8'));
- if(action==='verify'){console.log('Archive rebuild verified, with all packed file integrity hashes intact. No files changed.');return;}
- if(digest===sha(patched)){console.log('Latest ASCII wallpapers are installed; checksum verified.');return;}
- if(fs.existsSync(backup)&&sha(fs.readFileSync(backup))!==sha(original))throw Error('An existing backup belongs to another app build; it was preserved.');
+ const mainScript=fs.readFileSync(path.join(__dirname,'wallpapers-main.js'),'utf8');
+ const report=inspect(original,script,mainScript);
+ const label='Antigravity '+report.version+(report.verified?' (hand-verified build)':' (checked automatically)');
+ for(const w of report.warnings)console.warn('Note: '+w+'.');
+ if(action==='status'){
+  console.log(label+': wallpapers '+state+(r?' (last installed for '+r.version+' at '+r.installedAt+')':'')+'.');
+  console.log(report.errors.length?'Cannot be patched:\n - '+report.errors.join('\n - '):'Ready to patch.');
+  return;
+ }
+ if(report.errors.length)throw Error('Cannot patch '+label+':\n - '+report.errors.join('\n - '));
+ const patched=repack(original,script,mainScript);
+ if(action==='verify'){console.log(label+': archive rebuild verified, with all packed file integrity hashes intact. No files changed.');return;}
+ if(digest===sha(patched)){console.log('Latest ASCII wallpapers are installed for '+label+'; checksum verified.');return;}
+ // A backup from an older app build is kept beside the new one rather than overwritten.
+ if(fs.existsSync(backup)&&sha(fs.readFileSync(backup))!==sha(original)){
+  const old=backup+'.'+(r?.version||'previous')+'-'+Date.now();
+  fs.renameSync(backup,old);console.log('Kept the backup from the previous app build at '+old);
+ }
  if(!fs.existsSync(backup))fs.writeFileSync(backup,original,{flag:'wx'});
- const r={version:'2.28.2',original:sha(original),patched:sha(patched),installedAt:new Date().toISOString(),backup};
- fs.writeFileSync(receipt,JSON.stringify(r,null,2));
+ const next={version:report.version,verified:report.verified,original:sha(original),patched:sha(patched),installedAt:new Date().toISOString(),backup};
  replace(patched);
- console.log('Installed ASCII wallpapers. Original archive backed up at '+backup);
+ // Written only after a successful swap, so a failed swap leaves the previous receipt describing the archive on disk.
+ fs.writeFileSync(receipt,JSON.stringify(next,null,2));
+ console.log('Installed ASCII wallpapers for '+label+'. Original archive backed up at '+backup);
 }
 try{main();}catch(e){console.error(e.message);process.exitCode=1;}
