@@ -11,10 +11,10 @@ Live, animated backgrounds for the [Antigravity](https://antigravity.google) des
 ## Features
 
 - **23 live themes**: 9 light and 14 dark. Cloud Drift, Aurora, Honu Lagoon, Koi Pond, Jellyfish, Paper Boats, Sakura, Fireflies, Moonlit, Ember Dunes, Night Rain, Snowfall, Sky Lanterns, Windy Meadow, Spiral Galaxy, Bamboo Grove, Digital Rain, Morning Tide, Autumn Leaves, Alpine Dawn, Retro Sunset, Lava Lamp and Starry Catnap.
-- **Whole-app theming**: the sidebar, menus, composer, title bar and window controls are recolored to match each scene.
-- **Three ways to open the picker**: click **Themes** in the top right, press **Ctrl+Alt+W**, or type `/theme` in the composer.
-- **Controls**: Pause freezes the animation, Adjust sets intensity, and Off restores the stock look instantly.
-- **Reacts to your agents**: the scene speeds up and brightens while agents are running. When one finishes, a ripple spreads out from the composer. If the window was hidden at the time, the ripple plays when you come back. Turn it off under **Adjust → React to agents**.
+- **Whole-app theming (or wallpaper-only)**: the sidebar, menus, composer, title bar and window controls are recolored to match each scene, or uncheck **Adjust → Theme app** to keep Antigravity's stock UI chrome.
+- **Three ways to open or switch**: click **Themes** in the top right, press **Ctrl+Alt+W**, or type `/theme` in the composer (including direct commands like `/theme catnap`, `/theme random` or `/theme off`).
+- **Controls**: Pause freezes the animation, Adjust sets intensity, glyph style (**ASCII**, **Braille**, **Blocks**, **Katakana**) and grid density (**Fine**, **Normal**, **Chunky**), and Off restores the stock look instantly.
+- **Reacts to your agents**: the scene speeds up and brightens while agents are running, with scene-specific touches (Catnap's ear twitches and tail swishes, Digital Rain adds streams, Aurora flares, Koi and Fireflies liven up). When an agent finishes, a ripple spreads out from the composer. If the window was hidden at the time, the ripple plays when you come back. Turn it off under **Adjust → React to agents**.
 - **Stays out of the way**: the background sits behind your text and the composer stays fully interactive. Rendering pauses while the window is hidden, and reduced-motion settings are respected.
 - **Private**: no network requests. Your pick is saved locally in `%APPDATA%\Antigravity\ascii-wallpapers-preferences.json`.
 

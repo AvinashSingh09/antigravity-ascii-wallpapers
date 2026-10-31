@@ -3,7 +3,14 @@
 const drawAsciiScene = (() => {
   'use strict';
   // 0..11 is a density ramp; 12+ are special glyphs scenes pick directly.
-  const CH = ' .:-=+*tx%S#v^~o|/\\@\',zZ';
+  const SPECIAL = 'v^~o|/\\@\',zZ';
+  const GLYPHS = {
+    ascii: ' .:-=+*tx%S#' + SPECIAL,
+    braille: ' ⠁⠃⠇⠏⠟⠿⡿⣿▊▉█' + SPECIAL,
+    blocks: ' ·∙░▒▓█▀▄▌▐█' + SPECIAL,
+    katakana: ' ｡･ｰ+=*ﾅﾓﾐｼ#' + SPECIAL
+  };
+  const CH = GLYPHS.ascii, SCALES = { fine: 11, normal: 14, chunky: 18 };
   const hash = (x, y) => { let h = Math.imul(x | 0, 374761393) ^ Math.imul(y | 0, 668265263); h = Math.imul(h ^ (h >>> 13), 1274126177); return ((h ^ (h >>> 16)) >>> 0) / 4294967296; };
   const noise = (x, y) => {
     const xi = Math.floor(x), yi = Math.floor(y), xf = x - xi, yf = y - yi, u = xf * xf * (3 - 2 * xf), v = yf * yf * (3 - 2 * yf);
@@ -97,7 +104,8 @@ const drawAsciiScene = (() => {
     const yb = (v - .58) / (1 + .04 * Math.sin(t * 1.15)) + .58; // the back rises and falls from the ground up
     const hx = u + .78, hy = v - .22 - .012 * Math.sin(t * 1.15), hd = Math.hypot(hx, hy * 1.08);
     if (hy < -.14) for (const e of [-.26, .2]) {
-      const w = .19 * (hy + .63) / .49, dx = Math.abs(hx - e);
+      const twitch = e > 0 && o.e ? o.e * .045 * Math.sin(t * 7) : 0;
+      const w = .19 * (hy + .63) / .49, dx = Math.abs(hx - e - twitch);
       if (hy > -.63 && dx < w) { o.t = 1; o.c = dx < w * .42 && hy > -.5 ? 7 : 4; return true; }
     }
     if (hd < .4) {
@@ -109,7 +117,7 @@ const drawAsciiScene = (() => {
       return true;
     }
     if (hd < .47) { o.t = 1; o.c = 8; return true; }
-    const tv = .47 + .09 * Math.sin(u * 1.5 + .4), td = Math.abs(v - tv);
+    const tv = .47 + .09 * Math.sin(u * 1.5 + .4 + (o.e || 0) * Math.sin(t * 3.2) * .7), td = Math.abs(v - tv);
     if (u > -.42 && u < 1.08 && td < .13) { o.t = 1; o.c = u < -.2 ? 6 : Math.sin(u * 9) > .35 ? 5 : 4; return true; }
     if (u > -.42 && u < 1.08 && td < .2 && v < tv) { o.t = 1; o.c = 8; return true; }
     const q = (u - .1) ** 2 + (yb / .6) ** 2;
@@ -150,7 +158,7 @@ const drawAsciiScene = (() => {
           const hem = C[2] + .07 * Math.sin(s * 5.2 + t * .09 + L * 2) + .035 * Math.sin(s * 13 - t * .15 + L), d = hem - yy;
           if (d < -.02) continue;
           const rise = d < 0 ? 1 + d * 50 : Math.exp(-d * (2.6 + L * .8)), ray = .45 + .55 * noise(s * 60 + L * 9, t * .18 + L);
-          const pulse = .7 + .3 * Math.sin(s * 7 - t * .35 + L * 1.7), I = env * rise * ray * pulse * C[3];
+          const pulse = .7 + .3 * Math.sin(s * 7 - t * .35 + L * 1.7), I = env * rise * ray * pulse * C[3] * (1 + .35 * (o.e || 0));
           if (I > v) { v = I; c = d < .025 ? 0 : d < .08 ? 1 : d < .17 ? 2 : L === 1 ? 4 : 3; }
         }
         v *= refl;
@@ -184,7 +192,7 @@ const drawAsciiScene = (() => {
           if (dx * dx + dy * dy > L * L * .36) continue;
           const ang = Math.atan2(F[3] * Math.cos(a) * F[4], -F[2] * Math.sin(a) * F[4]), ca = Math.cos(ang), sa = Math.sin(ang);
           const u = (dx * ca + dy * sa) / (L * .5); let v = (-dx * sa + dy * ca) / (L * .5);
-          v -= Math.sin(u * 2.4 + t * 4.2 + k) * .065 * (1 - u);
+          v -= Math.sin(u * 2.4 + t * (4.2 + 2.5 * (o.e || 0)) + k) * (.065 + .025 * (o.e || 0)) * (1 - u);
           if (u > -.72 && u < 1) {
             const q = (u - .18) / .86, w = .32 * Math.pow(Math.max(0, 1 - q * q), .6);
             if (Math.abs(v) < w) { o.t = 1; o.c = KOIP[F[7]][noise(u * 2.6 + k * 9, v * 5 + k * 3) > .56 ? 1 : 0]; return; }
@@ -260,7 +268,7 @@ const drawAsciiScene = (() => {
       } },
     fireflies: { pal: ['#fbffb8', '#d8ef6f', '#7f9e3c', '#04100b', '#0a1d15', '#4f8a55', '#123224'], ink: '#020906',
       bg(g, w, h) { grad(g, w, h, [[0, '#0b2a26'], [.6, '#16392f'], [1, '#1e4433']]); glow(g, w * .5, h * .7, h * .8, '#9cd07a22'); },
-      pre(t, A) { for (let k = 0; k < 30; k++) { PX[k] = hash(k, 1) * A + .06 * Math.sin(t * .27 * (1 + hash(k, 3)) + k); PY[k] = .1 + .74 * hash(k, 2) + .05 * Math.cos(t * .23 * (1 + hash(k, 5)) + k * 1.7); PZ[k] = Math.pow(.5 + .5 * Math.sin(t * (.7 + hash(k, 4) * .8) + k * 3), 3); } },
+      pre(t, A, o) { const exp = 3 - 1.6 * (o?.e || 0); for (let k = 0; k < 30; k++) { PX[k] = hash(k, 1) * A + .06 * Math.sin(t * .27 * (1 + hash(k, 3)) + k); PY[k] = .1 + .74 * hash(k, 2) + .05 * Math.cos(t * .23 * (1 + hash(k, 5)) + k * 1.7); PZ[k] = Math.pow(.5 + .5 * Math.sin(t * (.7 + hash(k, 4) * .8) + k * 3), exp); } },
       f(x, y, t, A, o, i, j) {
         let best = 0;
         for (let k = 0; k < 30; k++) {
@@ -460,7 +468,7 @@ const drawAsciiScene = (() => {
     code: { pal: ['#eaffef', '#5dff8a', '#22c25e', '#0f5a2c'], ink: '#001a08',
       bg(g, w, h) { grad(g, w, h, [[0, '#010805'], [1, '#03140a']]); glow(g, w * .5, h * .5, h * .9, '#0a4a2030'); },
       f(x, y, t, A, o, i, j) {
-        if (hash(i, 9) > .3) for (let k = 0; k < 2; k++) {
+        if (hash(i, 9) > .3 - .22 * (o.e || 0)) for (let k = 0; k < ((o.e || 0) > .35 ? 3 : 2); k++) {
           const len = .25 + .35 * hash(i, k + 5), d = wrap(t * (.12 + .22 * hash(i, k + 2)) + hash(i, k + 4) * 3, 1.6) - .3 - y;
           if (d > 0 && d < len) { const q = d / len; o.v = 1 - q * .85; o.c = d < o.ch ? 0 : q < .3 ? 1 : 2; o.g = 3 + Math.floor(hash(i, j + Math.floor(t * (2 + 6 * hash(j, i)))) * 19); return; }
         }
@@ -542,7 +550,7 @@ const drawAsciiScene = (() => {
       f(x, y, t, A, o, i, j) {
         // Metaballs: blobs merge and split where their summed field crosses 1.
         let F = y > .95 + .015 * Math.sin(x * 5 + t * .4) ? 1.6 : 0;
-        for (let k = 0; k < 9; k++) { const dx = x - PX[k], dy = (y - PY[k]) * .8; F += PZ[k] / (dx * dx + dy * dy + 1e-4); }
+        for (let k = 0; k < 9; k++) { const dx = x - PX[k], dy = (y - PY[k]) * .8; F += PZ[k] * (1 + .28 * (o.e || 0)) / (dx * dx + dy * dy + 1e-4); }
         if (F > 1) { o.t = 1; o.c = F > 2.6 ? 0 : F > 1.5 ? 1 : 2; return; }
         if (F > .7) { o.v = (F - .7) * 1.4; o.c = 3; o.g = hash(i, j) > .5 ? 1 : 2; return; }
         if (hash(i, 5) > .93 && Math.abs(y - 1 + wrap(t * .05 * (1 + hash(i, 2)) + hash(i, 3), 1.1)) < o.ch * .5) { o.g = 15; o.c = 4; o.v = .6; }
@@ -551,11 +559,12 @@ const drawAsciiScene = (() => {
       bg(g, w, h) { grad(g, w, h, [[0, '#04061a'], [.5, '#0d1140'], [.8, '#211c5e'], [1, '#0b0f2a']]); glow(g, w * .55, h * .28, h * .9, '#5b4bd034');
         const A = w / h;
         for (const [fn, c] of [[napF, '#141d3c'], [napY, '#22325a']]) { g.fillStyle = c; g.beginPath(); g.moveTo(0, h); for (let px = 0; px <= w + 4; px += 4) g.lineTo(px, fn(px / h, A) * h); g.lineTo(w, h); g.fill(); } },
-      pre(t, A) {
-        // A meteor spends a third of its cycle crossing the sky; only live ones go on the list f walks.
+      pre(t, A, o) {
+        // A meteor spends a third of its cycle crossing the sky; agent activity or completion triggers a fuller shower.
         NAPN = 0;
+        const duty = Math.min(.88, .34 + .28 * (o?.e || 0) + .35 * (o?.p || 0));
         for (let k = 0; k < 120 && NAPN < 64; k++) {
-          const q = wrap(t / (5 + 9 * hash(k, 7)) + hash(k, 8), 1) / .34; if (q >= 1) continue;
+          const q = wrap(t / (5 + 9 * hash(k, 7)) + hash(k, 8), 1) / duty; if (q >= 1) continue;
           const d = q * (.9 + .5 * hash(k, 4));
           PX[NAPN] = hash(k, 1) * (A + .75) - d * .6; PY[NAPN] = hash(k, 2) * .6 - .3 + d * .8; PZ[NAPN] = .14 + .3 * hash(k, 3); NAPF[NAPN] = Math.sin(q * Math.PI); NAPC[NAPN++] = hash(k, 5) * 3;
         }
@@ -585,12 +594,12 @@ const drawAsciiScene = (() => {
       } }
   };
 
-  const cache = new WeakMap(), atlases = new Map(), o = { v: 0, c: 0, t: 0, g: -1, cw: 0, ch: 0 }, ALPHA = [.45, .65, .85, 1], TG = [2, 2, 7, 7, 9, 10, 1, 8];
-  function atlasFor(id, sc, theme, aw, ah) {
-    const key = id + '|' + aw + '|' + ah; let a = atlases.get(key); if (a) return a;
-    a = document.createElement('canvas'); a.width = CH.length * aw; a.height = (sc.pal.length + 1) * ah;
+  const cache = new WeakMap(), atlases = new Map(), o = { v: 0, c: 0, t: 0, g: -1, cw: 0, ch: 0, e: 0, p: 0 }, ALPHA = [.45, .65, .85, 1], TG = [2, 2, 7, 7, 9, 10, 1, 8];
+  function atlasFor(id, sc, theme, aw, ah, glyphs = 'ascii') {
+    const ch = GLYPHS[glyphs] || CH, key = id + '|' + glyphs + '|' + aw + '|' + ah; let a = atlases.get(key); if (a) return a;
+    a = document.createElement('canvas'); a.width = ch.length * aw; a.height = (sc.pal.length + 1) * ah;
     const g = a.getContext('2d'); g.font = `${Math.max(4, Math.round(ah * .74))}px Consolas, "Cascadia Mono", monospace`; g.textAlign = 'center'; g.textBaseline = 'middle';
-    [...sc.pal, sc.ink || theme.glyph].forEach((color, r) => { g.fillStyle = color; for (let c = 1; c < CH.length; c++) g.fillText(CH[c], c * aw + aw / 2, r * ah + ah * .54); });
+    [...sc.pal, sc.ink || theme.glyph].forEach((color, r) => { g.fillStyle = color; for (let c = 1; c < ch.length; c++) g.fillText(ch[c], c * aw + aw / 2, r * ah + ah * .54); });
     atlases.set(key, a); return a;
   }
   function background(w, h, theme, sc, k, cw, ch) {
@@ -613,17 +622,18 @@ const drawAsciiScene = (() => {
   // ripple that spreads out from the composer when an agent finishes.
   return function draw(ctx, width, height, theme, seconds, strength = 1, calm, fx) {
     if (!(width > 0 && height > 0)) return;
-    const sc = SCENES[theme.id] || SCENES.clouds, k = ctx.getTransform().a || 1, base = height > 220 ? 14 : Math.max(3.5, height / 24);
+    const glyphs = fx?.glyphs && GLYPHS[fx.glyphs] ? fx.glyphs : 'ascii';
+    const sc = SCENES[theme.id] || SCENES.clouds, k = ctx.getTransform().a || 1, base = height > 220 ? (SCALES[fx?.scale] || 14) : Math.max(3.5, height / 24);
     const ah = Math.max(3, Math.round(base * k)), aw = Math.max(2, Math.round(base * .66 * k)), cw = aw / k, ch = ah / k;
     const cols = Math.ceil(width / cw), rows = Math.ceil(height / ch), n = cols * rows, A = width / height, half = A / 2, gap = aw >= 6 ? 1 : 0;
     let st = cache.get(ctx); if (!st) { st = {}; cache.set(ctx, st); }
-    const key = width + '|' + height + '|' + theme.id + '|' + k;
+    const key = width + '|' + height + '|' + theme.id + '|' + k + '|' + glyphs + '|' + base;
     if (st.key !== key) {
       st.key = key; st.bg = background(width, height, theme, sc, k, cw, ch); st.K = new Int32Array(n).fill(-1);
-      st.layer = document.createElement('canvas'); st.layer.width = cols * aw; st.layer.height = rows * ah; st.lg = st.layer.getContext('2d'); st.atlas = atlasFor(theme.id, sc, theme, aw, ah);
+      st.layer = document.createElement('canvas'); st.layer.width = cols * aw; st.layer.height = rows * ah; st.lg = st.layer.getContext('2d'); st.atlas = atlasFor(theme.id, sc, theme, aw, ah, glyphs);
     }
     const K = st.K, lg = st.lg, atlas = st.atlas, pal = sc.pal, inkRow = pal.length, phase = Math.floor(seconds * 2.2);
-    o.cw = cw / height; o.ch = ch / height; sc.pre?.(seconds, A);
+    o.cw = cw / height; o.ch = ch / height; o.e = fx?.energy || 0; o.p = fx?.pulse || 0; sc.pre?.(seconds, A, o);
     const cl = calm ? calm.l / height : -1, cr = calm ? calm.r / height : -1;
     const glowUp = 1 + .35 * (fx?.energy || 0), fp = fx?.pulse || 0, rx = calm ? (cl + cr) / 2 : half, ry = .92;
     const rr = (1 - fp * fp) * Math.hypot(Math.max(rx, A - rx), ry) * 1.05, band = .07, amp = .45 + .75 * fp;
