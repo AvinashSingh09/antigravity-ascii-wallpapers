@@ -77,7 +77,7 @@ footer{padding:88px 0 56px;text-align:center;color:var(--muted);font-size:14px}
 <section>
   <h2>Made to stay out of the way.</h2>
   <div class="feats">
-    <div class="feat"><h3>One-click picker</h3><p>Click <b>Themes</b>, press <kbd>Ctrl</kbd> <kbd>Alt</kbd> <kbd>W</kbd>, or type <code>/theme</code>.</p></div>
+    <div class="feat"><h3>One-click picker</h3><p>Click <b>Themes</b>, press <kbd>Ctrl</kbd> <kbd>Alt</kbd> <kbd>W</kbd> (<kbd>⌥</kbd> <kbd>⌘</kbd> <kbd>W</kbd> on Mac), or type <code>/theme</code>.</p></div>
     <div class="feat"><h3>Whole-app theming</h3><p>The sidebar, menus, composer and title bar are recolored to match each scene.</p></div>
     <div class="feat"><h3>9 light, 14 dark</h3><p>From Cloud Drift and Sakura to Night Rain and Spiral Galaxy.</p></div>
     <div class="feat"><h3>Pause, Adjust, Off</h3><p>Freeze the motion, dial the intensity, or return to stock instantly.</p></div>
@@ -89,12 +89,12 @@ footer{padding:88px 0 56px;text-align:center;color:var(--muted);font-size:14px}
 
 <section>
   <h2>Install</h2>
-  <p class="center">Windows, Antigravity (<b>2.28.2</b> hand-verified, newer builds checked automatically), and <a href="https://nodejs.org">Node.js</a> 18+.</p>
+  <p class="center">Windows (macOS support is experimental), Antigravity (<b>2.28.2</b> hand-verified on Windows), and <a href="https://nodejs.org">Node.js</a> 18+.</p>
   <div class="steps">
     <div class="step"><div class="num">1</div><div><p><a href="https://github.com/Mix4o445/antigravity-ascii-wallpapers/archive/refs/heads/main.zip">Download the ZIP</a> and extract it.</p></div></div>
     <div class="step"><div class="num">2</div><div><p>Close Antigravity completely.</p></div></div>
-    <div class="step"><div class="num">3</div><div><p>Open PowerShell in the extracted folder and run:</p><pre>node .\manage-wallpapers.cjs install</pre></div></div>
-    <div class="step"><div class="num">4</div><div><p>Reopen Antigravity and click <b>Themes</b>. To uninstall later, close the app and run:</p><pre>node .\manage-wallpapers.cjs restore</pre></div></div>
+    <div class="step"><div class="num">3</div><div><p>Open Terminal (macOS) or PowerShell (Windows) in the extracted folder and run:</p><pre>node manage-wallpapers.cjs install</pre></div></div>
+    <div class="step"><div class="num">4</div><div><p>Reopen Antigravity and click <b>Themes</b>. To uninstall later, close the app and run:</p><pre>node manage-wallpapers.cjs restore</pre></div></div>
   </div>
   <p class="note">Unofficial community mod, not affiliated with or endorsed by Google. The installer runs safety checks on your app build before patching, keeps a backup, and refuses any build that fails them. App updates remove the mod; run the install command again afterwards.</p>
 </section>

@@ -1,8 +1,20 @@
-/* Usage: node manage-wallpapers.cjs install|verify|status|restore */
+/* Usage: node manage-wallpapers.cjs install|verify|status|restore [app-or-asar-path] */
 'use strict';
-const fs=require('fs'), path=require('path'), crypto=require('crypto'), vm=require('vm');
-const appDir=path.join(process.env.LOCALAPPDATA,'Programs','antigravity');
-const archive=path.join(appDir,'resources','app.asar');
+const fs=require('fs'), path=require('path'), crypto=require('crypto'), vm=require('vm'), os=require('os');
+function resolveArchive(){
+ const custom=process.argv[3]||process.env.ANTIGRAVITY_ASAR||process.env.ANTIGRAVITY_APP_PATH;
+ if(custom){
+  const p=path.resolve(custom);
+  if(fs.existsSync(p)&&fs.statSync(p).isFile())return p;
+  return [path.join(p,'Contents','Resources','app.asar'),path.join(p,'resources','app.asar'),path.join(p,'app.asar')].find(fs.existsSync)||p;
+ }
+ const candidates=process.platform==='darwin'
+  ? ['/Applications/Antigravity.app/Contents/Resources/app.asar',path.join(os.homedir(),'Applications','Antigravity.app','Contents','Resources','app.asar')]
+  : process.platform==='win32'&&process.env.LOCALAPPDATA?[path.join(process.env.LOCALAPPDATA,'Programs','antigravity','resources','app.asar')]:[];
+ return candidates.find(fs.existsSync)||candidates[0]||'';
+}
+const archive=resolveArchive();
+const appDir=path.dirname(path.dirname(archive));
 const backup=archive+'.ascii-wallpapers.backup';
 const receipt=archive+'.ascii-wallpapers.json';
 const MARKER='// BEGIN LOCAL ASCII WALLPAPERS';
@@ -28,12 +40,14 @@ function packedText(bytes,p){
 // Electron fuses live after a fixed sentinel in the executable. Fuse 4 is EnableEmbeddedAsarIntegrityValidation:
 // if a build turns it on, any edited archive would stop the app from launching, so refuse instead.
 function asarIntegrityFuse(){
- const exe=path.join(appDir,'Antigravity.exe');
+ const exe=process.platform==='darwin'
+  ? path.join(appDir,'Frameworks','Electron Framework.framework','Electron Framework')
+  : path.join(appDir,'Antigravity.exe');
  if(!fs.existsSync(exe))return 'unknown';
  const bytes=fs.readFileSync(exe),sentinel=Buffer.from('dL7pKGdnNz796PbbjQWNKmHXBZaB9tsX'),i=bytes.indexOf(sentinel);
  if(i<0)return 'unknown';
  const length=bytes[i+sentinel.length+1],wire=bytes.subarray(i+sentinel.length+2,i+sentinel.length+2+length).toString('latin1');
- return wire.length>4?(wire[4]==='1'?'on':'off'):'unknown';
+ return wire.length>4?(wire[4]==='1'?'on':wire[4]==='0'?'off':'unknown'):'unknown';
 }
 // Compile the patched file the way Electron loads CommonJS, without running it.
 function compiles(source,name){
@@ -53,7 +67,8 @@ function inspect(original,script,mainScript){
  if(main!==null&&!compiles(main+'\n\n'+MARKER+'\n'+mainScript,'dist/main.js'))errors.push('the patched dist/main.js would not compile');
  const fuse=asarIntegrityFuse();
  if(fuse==='on')errors.push('Electron ASAR integrity validation is enabled for this build');
- if(fuse==='unknown')warnings.push('could not read Electron fuses from Antigravity.exe');
+ if(fuse==='unknown'&&process.platform==='darwin')errors.push('could not verify the macOS Electron ASAR integrity fuse; refusing to modify the application');
+ else if(fuse==='unknown')warnings.push('could not read Electron fuses from Antigravity.exe');
  if(preload!==null){
   if(!preload.includes('const electron_1 = require("electron")'))warnings.push('preload has no electron_1; preferences fall back to page storage');
   if(!preload.includes('electronNativeAPI'))warnings.push('preload has no electronNativeAPI; the title bar will not be recolored');

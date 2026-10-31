@@ -598,7 +598,7 @@ const drawAsciiScene = (() => {
   function atlasFor(id, sc, theme, aw, ah, glyphs = 'ascii') {
     const ch = GLYPHS[glyphs] || CH, key = id + '|' + glyphs + '|' + aw + '|' + ah; let a = atlases.get(key); if (a) return a;
     a = document.createElement('canvas'); a.width = ch.length * aw; a.height = (sc.pal.length + 1) * ah;
-    const g = a.getContext('2d'); g.font = `${Math.max(4, Math.round(ah * .74))}px Consolas, "Cascadia Mono", monospace`; g.textAlign = 'center'; g.textBaseline = 'middle';
+    const g = a.getContext('2d'); g.font = `${Math.max(4, Math.round(ah * .74))}px "SF Mono", Menlo, Monaco, Consolas, "Cascadia Mono", monospace`; g.textAlign = 'center'; g.textBaseline = 'middle';
     [...sc.pal, sc.ink || theme.glyph].forEach((color, r) => { g.fillStyle = color; for (let c = 1; c < ch.length; c++) g.fillText(ch[c], c * aw + aw / 2, r * ah + ah * .54); });
     atlases.set(key, a); return a;
   }
