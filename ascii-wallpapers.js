@@ -48,12 +48,14 @@
   function save(){const value=JSON.stringify(prefs);saveQueue=saveQueue.catch(()=>{}).then(()=>native?native.save(value):localStorage.setItem(KEY,value)).catch(()=>{shadow.querySelector('.status').textContent='Could not save this theme. Please try again.';});}
   const paletteIcon='<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="3"/><path d="m3 16 5-5 4 4 3-3 6 6"/><circle cx="16" cy="9" r="1.5"/></svg>';
   const closeIcon='<svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="m4 4 8 8M12 4l-8 8"/></svg>';
+  const isMac=typeof navigator!=='undefined'&&(/(Mac|iPhone|iPad|iPod)/i.test(navigator.platform||'')||/Mac/i.test(navigator.userAgent||''));
   function build(){
-    host=make('div',{id:'agy-ascii-controls'});host.style.visibility='hidden';document.body.append(host);shadow=host.attachShadow({mode:'open'});
+    host=make('div',{id:'agy-ascii-controls'});if(isMac)host.setAttribute('data-platform','darwin');host.style.visibility='hidden';document.body.append(host);shadow=host.attachShadow({mode:'open'});
     const css=make('style');css.textContent=`
       :host{all:initial;position:fixed;top:0;left:0;width:0;height:0;z-index:2147483000;pointer-events:none;font-family:system-ui,-apple-system,Segoe UI,sans-serif;color:var(--aw-fg,#edf0fa);--aw-panel:#0d1224;--aw-card:#1e263c;--aw-fg:#edf0fa;--aw-muted:#bdc6df;--aw-border:#465375;--aw-accent:#ddd8ad}
       *{box-sizing:border-box}button,input{font:inherit}button{cursor:pointer}button:focus-visible,input:focus-visible{outline:2px solid var(--aw-accent);outline-offset:3px}button:disabled{opacity:.45;cursor:default}[hidden]{display:none!important}
       .trigger{position:fixed;top:5px;right:155px;pointer-events:auto;-webkit-app-region:no-drag;display:flex;align-items:center;gap:6px;height:25px;padding:0 9px;border:1px solid transparent;border-radius:5px;color:var(--aw-fg);background:transparent;font-size:11px}
+      :host([data-platform=darwin]) .trigger{right:200px}
       .trigger:hover,.trigger[aria-expanded=true]{background:color-mix(in srgb,var(--aw-fg) 10%,transparent)}
       .panel{position:fixed;pointer-events:auto;-webkit-app-region:no-drag;padding:10px;border:1px solid var(--aw-border);border-radius:8px;background:var(--aw-panel);color:var(--aw-fg);box-shadow:0 6px 20px #0000001a}
       .header{display:flex;align-items:center;gap:8px;height:22px;margin:0 2px 8px;font-size:12px;white-space:nowrap}.current{overflow:hidden;text-overflow:ellipsis}.kind{color:var(--aw-muted);font-size:11px}.spacer{flex:1}
@@ -64,10 +66,11 @@
       .choice[aria-pressed=true]{box-shadow:0 0 0 2px var(--aw-panel),0 0 0 3px var(--aw-fg)}
       .settings{display:flex;align-items:center;gap:10px;margin:10px 2px 0;font-size:11px;color:var(--aw-muted)}.settings label{display:flex;align-items:center;gap:8px}.settings input{width:160px;accent-color:var(--aw-fg)}.value{font-variant-numeric:tabular-nums}.status{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%)}
       @media(max-width:900px){.choices{grid-template-columns:repeat(auto-fill,minmax(54px,1fr))}}
-      @media(max-width:650px){.kind{display:none}.trigger span{display:none}.trigger{right:145px}.settings input{width:100px}}
+      @media(max-width:650px){.kind{display:none}.trigger span{display:none}.trigger{right:145px}:host([data-platform=darwin]) .trigger{right:180px}.settings input{width:100px}}
       @media(prefers-reduced-motion:reduce){.preview{transition:none}}
     `;shadow.append(css);
-    const trigger=make('button',{class:'trigger',type:'button','aria-label':'Choose theme','aria-expanded':'false','aria-controls':'theme-picker',title:'Themes · Ctrl+Alt+W'});trigger.innerHTML=paletteIcon+'<span>Themes</span>';
+    const triggerTitle='Themes · '+(isMac?'⌥⌘W':'Ctrl+Alt+W');
+    const trigger=make('button',{class:'trigger',type:'button','aria-label':'Choose theme','aria-expanded':'false','aria-controls':'theme-picker',title:triggerTitle});trigger.innerHTML=paletteIcon+'<span>Themes</span>';
     const panel=make('section',{class:'panel',id:'theme-picker','aria-label':'ASCII wallpaper themes',hidden:''});
     const header=make('div',{class:'header'});header.append(make('span',{class:'current'}),make('span',{class:'kind'}),make('span',{class:'spacer'}));
     const tools=make('div',{class:'tools'});
@@ -90,7 +93,7 @@
     listen(choices,'keydown',e=>{const all=[...choices.children],i=all.indexOf(e.target.closest('.choice'));if(i<0)return;let next=i;if(e.key==='ArrowRight')next=(i+1)%all.length;else if(e.key==='ArrowLeft')next=(i-1+all.length)%all.length;else if(e.key==='Home')next=0;else if(e.key==='End')next=all.length-1;else return;e.preventDefault();all[next].focus();select(all[next].dataset.theme);});
     listen(document,'pointerdown',e=>{if(open&&!e.composedPath().includes(host))toggle(false,false);});
     listen(document,'keydown',e=>{
-      if(e.ctrlKey&&e.altKey&&e.code==='KeyW'){e.preventDefault();toggle(!open);}
+      if((e.ctrlKey||e.metaKey)&&e.altKey&&e.code==='KeyW'){e.preventDefault();toggle(!open);}
       if(e.key==='Escape'&&open){e.preventDefault();e.stopPropagation();toggle(false);}
       const editor=e.target.closest?.('[contenteditable=true],textarea');
       if(e.key==='Enter'&&editor&&(editor.value??editor.textContent).trim()==='/theme'){
@@ -104,7 +107,33 @@
   function toggle(value,focus=true){open=value;shadow.querySelector('.panel').hidden=!open;shadow.querySelector('.trigger').setAttribute('aria-expanded',String(open));syncLayout();if(open){const b=shadow.querySelector(`[data-theme="${prefs.theme==='off'?'clouds':prefs.theme}"]`);b?.focus({preventScroll:true});b?.scrollIntoView({block:'nearest',inline:'center'});previews(true);}else if(focus)shadow.querySelector('.trigger').focus();}
   function select(id){prefs.theme=id;apply();save();}
   function label(t=prefs.theme==='off'?null:current()){shadow.querySelector('.current').textContent=t?t.name:'Original';shadow.querySelector('.kind').textContent=t?(t.light?'Light':'Dark'):'Antigravity';}
+  function positionTrigger(){
+    if(!shadow)return;
+    const trigger=shadow.querySelector('.trigger');
+    if(!trigger)return;
+    const candidates=document.querySelectorAll('button, a, [role="button"], div');
+    let anchor=null;
+    for(const el of candidates){
+      if(/Open\s+IDE/i.test(el.textContent||'')&&(el.textContent||'').trim().length<30){
+        const r=el.getBoundingClientRect();
+        if(r.top>=0&&r.top<60&&r.left>50&&r.width>10&&r.height>10){
+          anchor=el.closest('button, a, [role="button"]')||el;
+          break;
+        }
+      }
+    }
+    if(anchor){
+      const r=anchor.getBoundingClientRect();
+      trigger.style.right=Math.round(window.innerWidth-r.left+8)+'px';
+      const targetTop=Math.round(r.top+(r.height-25)/2);
+      if(targetTop>=0&&targetTop<40)trigger.style.top=targetTop+'px';
+    }else{
+      trigger.style.right=isMac?'200px':'155px';
+      trigger.style.top='5px';
+    }
+  }
   function syncLayout(){
+    positionTrigger();
     if(!host||!sheet)return;
     const bounds=sheet.getBoundingClientRect(),composerElement=sheet.querySelector('.surface-composer'),composer=composerElement?.getBoundingClientRect();
     const panel=shadow.querySelector('.panel');const width=Math.min(760,bounds.width-38,innerWidth-24);

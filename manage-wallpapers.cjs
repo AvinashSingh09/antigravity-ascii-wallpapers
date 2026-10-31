@@ -1,7 +1,43 @@
-/* Usage: node manage-wallpapers.cjs install|restore */
+/* Usage: node manage-wallpapers.cjs install|restore|verify [app-or-asar-path] */
 'use strict';
-const fs=require('fs'), path=require('path'), crypto=require('crypto');
-const archive=path.join(process.env.LOCALAPPDATA,'Programs','antigravity','resources','app.asar');
+const fs=require('fs'), path=require('path'), crypto=require('crypto'), os=require('os');
+
+function resolveArchive(){
+ const custom=process.argv[3]||process.env.ANTIGRAVITY_ASAR||process.env.ANTIGRAVITY_APP_PATH;
+ if(custom){
+  if(fs.existsSync(custom)&&fs.statSync(custom).isFile())return path.resolve(custom);
+  const nested=[
+   path.join(custom,'Contents','Resources','app.asar'),
+   path.join(custom,'resources','app.asar'),
+   path.join(custom,'app.asar')
+  ];
+  for(const c of nested)if(fs.existsSync(c))return path.resolve(c);
+  return path.resolve(custom);
+ }
+ const home=os.homedir(),candidates=[];
+ if(process.platform==='darwin'){
+  candidates.push(
+   '/Applications/Antigravity.app/Contents/Resources/app.asar',
+   path.join(home,'Applications','Antigravity.app','Contents','Resources','app.asar')
+  );
+ }else if(process.platform==='win32'){
+  if(process.env.LOCALAPPDATA){
+   candidates.push(path.join(process.env.LOCALAPPDATA,'Programs','antigravity','resources','app.asar'));
+  }
+ }else{
+  candidates.push(
+   '/opt/Antigravity/resources/app.asar',
+   '/usr/lib/antigravity/resources/app.asar',
+   path.join(home,'.local','share','antigravity','resources','app.asar')
+  );
+ }
+ for(const c of candidates)if(fs.existsSync(c))return c;
+ return candidates[0]||(process.platform==='darwin'
+  ?'/Applications/Antigravity.app/Contents/Resources/app.asar'
+  :(process.env.LOCALAPPDATA?path.join(process.env.LOCALAPPDATA,'Programs','antigravity','resources','app.asar'):''));
+}
+
+const archive=resolveArchive();
 const backup=archive+'.ascii-wallpapers.backup';
 const receipt=archive+'.ascii-wallpapers.json';
 const sha=b=>crypto.createHash('sha256').update(b).digest('hex');
@@ -46,11 +82,35 @@ function repack(original,script,mainScript){
  }}verify(decoded.header);
  return output;
 }
-function replace(bytes){const temp=archive+'.ascii-wallpapers.tmp';fs.writeFileSync(temp,bytes);fs.renameSync(temp,archive);}
+function replace(bytes){
+ const temp=archive+'.ascii-wallpapers.tmp';
+ try{
+  fs.writeFileSync(temp,bytes);
+  fs.renameSync(temp,archive);
+ }catch(err){
+  if(fs.existsSync(temp))try{fs.unlinkSync(temp);}catch{}
+  if(err.code==='EACCES'||err.code==='EPERM'){
+   throw Error(`Permission denied writing to ${archive}.\nOn macOS/Linux, try running with: sudo node manage-wallpapers.cjs ${process.argv[2]||'install'}`);
+  }
+  throw err;
+ }
+}
 function main(){
  const action=process.argv[2];
  if(!['install','restore','verify'].includes(action))throw Error('Use install, restore, or verify');
- let original=fs.readFileSync(archive);const digest=sha(original);
+ if(!archive||!fs.existsSync(archive)){
+  throw Error(`Antigravity app archive not found.\nSearched at: ${archive||'unknown'}\nPlease ensure Antigravity 2.28.2 is installed, or specify its path:\n  node manage-wallpapers.cjs ${action} /path/to/Antigravity.app\nor set ANTIGRAVITY_ASAR=/path/to/app.asar`);
+ }
+ let original;
+ try{
+  original=fs.readFileSync(archive);
+ }catch(err){
+  if(err.code==='EACCES'||err.code==='EPERM'){
+   throw Error(`Permission denied reading ${archive}.\nOn macOS/Linux, try running with: sudo node manage-wallpapers.cjs ${action}`);
+  }
+  throw err;
+ }
+ const digest=sha(original);
  if(action==='restore'){
   if(!fs.existsSync(receipt)||!fs.existsSync(backup))throw Error('No wallpaper backup found');
   const r=JSON.parse(fs.readFileSync(receipt,'utf8'));
@@ -72,10 +132,17 @@ function main(){
  if(action==='verify'){console.log('Archive rebuild verified, with all packed file integrity hashes intact. No files changed.');return;}
  if(digest===sha(patched)){console.log('Latest ASCII wallpapers are installed; checksum verified.');return;}
  if(fs.existsSync(backup)&&sha(fs.readFileSync(backup))!==sha(original))throw Error('An existing backup belongs to another app build; it was preserved.');
- if(!fs.existsSync(backup))fs.writeFileSync(backup,original,{flag:'wx'});
- const r={version:'2.28.2',original:sha(original),patched:sha(patched),installedAt:new Date().toISOString(),backup};
- fs.writeFileSync(receipt,JSON.stringify(r,null,2));
- replace(patched);
+ try{
+  if(!fs.existsSync(backup))fs.writeFileSync(backup,original,{flag:'wx'});
+  const r={version:'2.28.2',original:sha(original),patched:sha(patched),installedAt:new Date().toISOString(),backup};
+  fs.writeFileSync(receipt,JSON.stringify(r,null,2));
+  replace(patched);
+ }catch(err){
+  if(err.code==='EACCES'||err.code==='EPERM'){
+   throw Error(`Permission denied writing to ${archive}.\nOn macOS/Linux, try running with: sudo node manage-wallpapers.cjs ${action}`);
+  }
+  throw err;
+ }
  console.log('Installed ASCII wallpapers. Original archive backed up at '+backup);
 }
 try{main();}catch(e){console.error(e.message);process.exitCode=1;}
